@@ -1,0 +1,6 @@
+runs/
+opt/
+build/
+survey.conf
+__pycache__/
+*.pyc

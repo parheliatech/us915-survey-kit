@@ -1,0 +1,31 @@
+# Survey settings. install.sh copies this file to survey.conf; edit survey.conf, not this file.
+
+# --- about the site (goes on the report) ---
+SITE_NAME="My site"                  # short name, used in the report title and the run folder name
+SITE_LOCATION=""                     # coarse location, e.g. "Springfield, IL" (leave empty to keep it off the report)
+OPERATOR=""                          # who ran the survey (optional)
+ANTENNA="describe the antenna, height and placement"
+
+# --- where data goes ---
+DATA_DIR="runs"                      # one sub-folder per survey run (relative paths are inside the kit folder)
+IQ_DIR=""                            # raw IQ while it is processed; default <run>/iq. Put it on a big disk if KEEP_IQ=yes
+KEEP_IQ=no                           # yes keeps every raw dwell (~1.15 GB per 4-minute dwell, ~200 GB for 12 passes)
+IQ_CAP_GB=80                         # capture pauses while the IQ folder holds more than this
+MIN_FREE_GB=5                        # capture pauses while the disk has less free space than this
+
+# --- receiver ---
+DEVICE=0                             # rtl-sdr device index (rtl_test lists them)
+GAIN=40                              # tuner gain in dB; lower it if the report shows heavy clipping
+PPM=""                               # dongle frequency error if you know it (e.g. +4.5); empty = 0. The report measures it
+                                     # from decoded packets either way. Set it if the report shows more than about 10 ppm.
+
+# --- power survey (where the energy is) ---
+POWER_HOURS=24                       # 0 skips the power survey
+POWER_INTERVAL=2                     # seconds per full 902-928 MHz sweep
+POWER_CROP=20%                       # overlap of rtl_power hops (reduces droop at hop edges)
+
+# --- raw-IQ scan (what the signals are) ---
+IQ_PASSES=12                         # one pass = one visit to each of the 15 windows; 12 passes at 240 s = about 12 h
+DWELL_S=240                          # seconds per window visit
+MAX_PARALLEL=2                       # dwells decoded at once (each uses several cores); capture never waits for them
+FSK_SECONDS=60                       # seconds of each dwell given to the FSK burst survey

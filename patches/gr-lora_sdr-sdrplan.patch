@@ -1,0 +1,70 @@
+diff --git a/lib/frame_sync_impl.cc b/lib/frame_sync_impl.cc
+index 7b3f306..cc66f51 100644
+--- a/lib/frame_sync_impl.cc
++++ b/lib/frame_sync_impl.cc
+@@ -709,11 +709,14 @@ namespace gr
+                     one_symbol_off = 0;
+ 
+                     if (m_sync_words[0] == 0) { // match netid1 only if requested
+-                        items_to_consume = 0;
++                        // sdr-plan-a: any sync word. Sync word nibbles are sent as multiples of 8, so the distance of
++                        // netid1 to the nearest multiple of 8 is the timing offset the known-sync-word path derives below.
++                        net_id_off = netid1 - 8 * (int)std::lround(netid1 / 8.0);
++                        if (m_should_log)
++                            off_by_one_id = net_id_off != 0;
++                        items_to_consume = -m_os_factor * net_id_off;
+                         m_state = SFO_COMPENSATION;
+                         frame_cnt++;
+-                        std::cout << "netid1 is " << netid1 << ", netid2 is " << netid2 <<
+-                            ", check skipped" << std::endl;
+                     }
+                     else if (abs(netid1 - (int32_t)m_sync_words[0]) > 2) // wrong id 1, (we allow an offset of 2)
+                     {
+@@ -803,6 +806,12 @@ namespace gr
+                         frame_info = pmt::dict_add(frame_info, pmt::intern("cfo_int"), pmt::mp((long)m_cfo_int));
+                         frame_info = pmt::dict_add(frame_info, pmt::intern("cfo_frac"), pmt::mp((float)m_cfo_frac));
+                         frame_info = pmt::dict_add(frame_info, pmt::intern("sf"), pmt::mp((long)m_sf));
++                        // sdr-plan-a: expose detected sync word symbols, SNR and input position for logging
++                        frame_info = pmt::dict_add(frame_info, pmt::intern("netid1"), pmt::mp((long)mod(netid1 - net_id_off, m_number_of_bins)));
++                        frame_info = pmt::dict_add(frame_info, pmt::intern("netid2"), pmt::mp((long)mod(netid2 - net_id_off, m_number_of_bins)));
++                        frame_info = pmt::dict_add(frame_info, pmt::intern("netid_off"), pmt::mp((long)net_id_off));
++                        frame_info = pmt::dict_add(frame_info, pmt::intern("snr"), pmt::mp((float)snr_est));
++                        frame_info = pmt::dict_add(frame_info, pmt::intern("in_offset"), pmt::from_uint64(nitems_read(0)));
+ 
+                         add_item_tag(0, nitems_written(0), pmt::string_to_symbol("frame_info"), frame_info);
+ 
+diff --git a/lib/header_decoder_impl.cc b/lib/header_decoder_impl.cc
+index a1cb4d7..df99194 100644
+--- a/lib/header_decoder_impl.cc
++++ b/lib/header_decoder_impl.cc
+@@ -63,6 +63,10 @@ namespace gr
+             header_content = pmt::dict_add(header_content, pmt::intern("crc"), pmt::from_long(crc));
+             header_content = pmt::dict_add(header_content, pmt::intern("ldro_mode"), pmt::from_long(ldro_mode));
+             header_content = pmt::dict_add(header_content, pmt::intern("err"), pmt::from_long(err));
++            // sdr-plan-a: carry frame_sync fields (sync word, SNR, CFO, position) through to the outputs
++            for (const char *k : {"sf", "cfo_int", "cfo_frac", "netid1", "netid2", "netid_off", "snr", "in_offset"})
++                if (pmt::dict_has_key(m_sync_info, pmt::intern(k)))
++                    header_content = pmt::dict_add(header_content, pmt::intern(k), pmt::dict_ref(m_sync_info, pmt::intern(k), pmt::PMT_NIL));
+             message_port_pub(pmt::intern("frame_info"), header_content);
+             if(!err) //don't propagate downstream that a frame was detected
+                 add_item_tag(0, nitems_written(0), pmt::string_to_symbol("frame_info"), header_content);
+@@ -102,6 +106,7 @@ namespace gr
+                     if (is_header)
+                     {
+                         pay_cnt = 0;
++                        m_sync_info = tags[0].value;
+                     }
+                 }
+             }
+diff --git a/lib/header_decoder_impl.h b/lib/header_decoder_impl.h
+index 47be455..71813c6 100644
+--- a/lib/header_decoder_impl.h
++++ b/lib/header_decoder_impl.h
+@@ -19,6 +19,7 @@ namespace gr {
+         bool m_has_crc;///< Specify the usage of a payload CRC
+         uint8_t m_cr;///< Coding rate
+         uint8_t m_ldro_mode; ///< use low datarate optimisation 
++        pmt::pmt_t m_sync_info = pmt::make_dict(); ///< sdr-plan-a: frame_sync tag of the current frame
+ 
+         uint8_t header_chk; ///< The header checksum received in the header
+ 
